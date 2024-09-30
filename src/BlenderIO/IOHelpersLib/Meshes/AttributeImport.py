@@ -10,8 +10,7 @@ def import_loop_normals(bpy_mesh, normals):
     Works thanks to this stackexchange answer https://blender.stackexchange.com/a/75957,
     which a few of these comments below are also taken from.
     """
-    bpy_mesh.create_normals_split()
-    bpy_mesh.calc_normals_split()
+    bpy_mesh.corner_normals
     #  mesh.normals_split_custom_set( [(1, 1, 0) for v in mesh.loops] )???
     for face in bpy_mesh.polygons:
         face.use_smooth = True  # loop normals have effect only if smooth shading ?
@@ -36,7 +35,7 @@ def import_loop_normals(bpy_mesh, normals):
     # In this way, a flat list is iterated over in triplets without wasting memory by copying the whole list
     bpy_mesh.normals_split_custom_set(tuple(zip(*(iter(clnors),) * 3)))
 
-    bpy_mesh.use_auto_smooth = True
+    bpy_mesh.corner_normals
 
 
 def create_uv_map(bpy_mesh, name, uvs):
