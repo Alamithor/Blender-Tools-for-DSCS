@@ -530,8 +530,10 @@ class UnpackedImageExtractor(BaseImageExtractor):
     
     def export(self, path):
         filepath = os.path.join(path, self.export_name + ".img")
+        file_data = self.get_data()
+        print(f'Exporting image: {filepath}')
         with open(filepath, 'wb') as F:
-            F.write(self.get_data())
+            F.write(file_data)
         
         
 def extract_textures(gi, texture_names, errorlog):
@@ -570,8 +572,10 @@ def extract_textures(gi, texture_names, errorlog):
         if bpy_image is None:
             raise NotImplementedError("NEED TO EXPORT PLACEHOLDER DDS HERE") # Export dummy DDS
         elif bpy_image.packed_file is not None:
+            print('packed image extractor', bpy_image, texture_name)
             texture_extractors.append(PackedImageExtractor(bpy_image, texture_name))
         elif bpy_image.source == "FILE" and os.path.exists(bpy_image.filepath_from_user()):
+            print('unpacked image extractor', bpy_image.filepath_from_user(), texture_name)
             texture_extractors.append(UnpackedImageExtractor(bpy_image, texture_name))
         else:
             errorlog.log_error_message(f"Image '{bpy_image.name}' if not a packed file or a file that exists on disk. Only packed files or images with valid filepaths can currently be exported.")
