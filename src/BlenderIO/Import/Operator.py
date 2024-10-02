@@ -5,7 +5,7 @@ import bpy
 from bpy.props import BoolProperty, EnumProperty, CollectionProperty
 from bpy_extras.io_utils import ImportHelper
 
-from. ..Core.FileFormats.Name.NameInterface import NameInterface
+from ...Core.FileFormats.Name.NameInterface import NameInterface
 from ...Core.FileFormats.Skel.SkelInterface import SkelInterface
 from ...Core.FileFormats.Geom.GeomInterface import GeomInterface
 from ...Core.FileFormats.Anim.AnimInterface import AnimInterface
@@ -41,13 +41,11 @@ class ImportMediaVision(bpy.types.Operator):
         # Load files
         ni = NameInterface.from_file(os.path.join(directory, model_name + ".name"))
         si = SkelInterface.from_file(os.path.join(directory, model_name + ".skel"))
-        gb = GeomInterface.binary_type(self.model_type)()
-        gb.read(os.path.join(directory, model_name + ".geom"))
-        gi = GeomInterface.from_binary(gb)
+        gi = GeomInterface.from_file(os.path.join(directory, model_name + ".geom"), self.model_type)
 
         # Import data
         collection = init_collection(model_name)
-        armature_obj, dscs_to_bpy_bone_map = import_skeleton(collection, armature_name, ni, si, gi, [2* d for d in gb.bounding_box_diagonal])
+        armature_obj, dscs_to_bpy_bone_map = import_skeleton(collection, armature_name, ni, si, gi, [2* d for d in gi.bounding_box_diagonal])
         material_list = import_materials(ni, gi, directory, self.img_to_dds, self.use_custom_nodes)
         import_meshes(collection, model_name, ni, gi, armature_obj, material_list, errorlog, self.merge_vertices)
         import_cameras(collection, armature_obj, dscs_to_bpy_bone_map, gi)
@@ -75,8 +73,11 @@ class ImportMediaVision(bpy.types.Operator):
         armature_obj.animation_data.nla_tracks["base"].mute = False
 
         # Finalise
-        bpy.ops.object.mode_set(mode="OBJECT")
-        
+        try:
+            bpy.ops.object.mode_set(mode="OBJECT")
+        except Exception as e:
+            print(e)
+
         # Import physics
         physics_path = os.path.join(directory, model_name + ".phys")
         if os.path.exists(physics_path):

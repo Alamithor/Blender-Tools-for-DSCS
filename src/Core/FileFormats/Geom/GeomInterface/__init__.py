@@ -21,6 +21,7 @@ class GeomInterface:
         self.lights = []
         self.ibpms = []
         self.extra_clut = None
+        self.bounding_box_diagonal = None
 
     __KEY_MAPPING = {
         "DSCS_OpenGL": GeomBinaryDSCSOpenGL,
@@ -93,7 +94,7 @@ class GeomInterface:
         return binary_class
 
     @classmethod
-    def from_file(cls, path, model_type):
+    def from_file(cls, path, model_type, invalidate_binary_allowed = False):
         binary_class = cls.binary_type(model_type)
         
         binary = binary_class()
@@ -118,7 +119,7 @@ class GeomInterface:
         #
         #     shaders.append((vertex_shader, fragment_shader))
 
-        return cls.from_binary(binary, invalidate_binary_allowed=True)
+        return cls.from_binary(binary, invalidate_binary_allowed=invalidate_binary_allowed)
 
     @classmethod
     def from_binary(cls, binary, invalidate_binary_allowed=False):
@@ -130,6 +131,7 @@ class GeomInterface:
         instance.lights     = binary.lights
         instance.ibpms      = binary.ibpms
         instance.extra_clut = binary.extra_clut
+        instance.bounding_box_diagonal = binary.bounding_box_diagonal
         return instance
 
     def to_file(self, filepath, model_type, invalidate_self_allowed=False):
