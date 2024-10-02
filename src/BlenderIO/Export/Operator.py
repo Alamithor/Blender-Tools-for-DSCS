@@ -114,7 +114,7 @@ class ExportDSCS(ExportMediaVision, ExportHelper):
     bl_label = 'Digimon Story: Cyber Sleuth (.name, .skel, .geom)'
     bl_options = {'REGISTER', 'UNDO'}
     # This will actually work with any file extension since the code just looks for the right ones...
-    filename_ext = "*.name"
+    filename_ext = ".name"
 
     #files: CollectionProperty(type=bpy.types.PropertyGroup)
 
