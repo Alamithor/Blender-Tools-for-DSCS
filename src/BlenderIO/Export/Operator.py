@@ -45,6 +45,8 @@ class ExportMediaVision(bpy.types.Operator):
                                   self.missing_weights_policy)
         bpy_to_dscs_bone_map = {}
         material_names = []
+
+        print("Exporting...", self.filepath)
         
         # NEED TO CREATE A 'TRANSFORMS' OBJECT + INSTANCE THAT CAN BE DIRECTLY
         # USED BY THE TRANSFORMY ALGORITHMS
