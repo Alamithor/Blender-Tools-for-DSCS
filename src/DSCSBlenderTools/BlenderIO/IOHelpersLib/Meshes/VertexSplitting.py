@@ -83,14 +83,18 @@ def get_binormals(bpy_mesh_obj, use_binormals, sigfigs, transform=lambda x, l: x
         return empty_attr(nloops)
 
 
-def get_uvs(bpy_mesh_obj, use_uv, map_name, sigfigs, errorlog=None, transform=lambda x, l: x):
+def uv_transformation(data, loops):
+    return tuple([data[0], 1.-data[1]])
+
+
+def get_uvs(bpy_mesh_obj, use_uv, map_name, sigfigs, errorlog=None):
     mesh = bpy_mesh_obj.data
     nloops = len(mesh.loops)
     if use_uv:
         if map_name in mesh.uv_layers:
             data  = fetch_data(mesh.uv_layers[map_name].data, "uv", sigfigs)
             loops = mesh.loops
-            return [transform(d, l) for d, l in zip(data, loops)]
+            return [uv_transformation(d, l) for d, l in zip(data, loops)]
         else:
             if errorlog is not None:
                 errorlog.log_warning_message(f"Unable to locate UV Map '{map_name}' on mesh '{bpy_mesh_obj.name}'; exporting a fallback blank map")
