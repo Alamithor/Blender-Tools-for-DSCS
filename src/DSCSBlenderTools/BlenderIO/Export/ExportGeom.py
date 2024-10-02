@@ -108,7 +108,7 @@ def extract_meshes(gi, armature_obj, errorlog,  bone_names, material_names):
         unsigned_hash = struct.unpack('I', struct.pack('i', props.name_hash))[0]
         m = gi.add_mesh(unsigned_hash, props.flags, material_idx, vertices, indices)
         m.vertex_attributes = None  # Setting to 'None' will cause the attributes to be auto-calculated
-    
+
 
 def extract_vertices(bpy_mesh_obj, errorlog, bone_names):
     bpy_mesh = bpy_mesh_obj.data
