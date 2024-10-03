@@ -114,10 +114,10 @@ def optimise_base_anim(ai):
     Optimise the base animation by dropping any animation channels with less
     than two frames, since these are already loaded into constant skeleton data.
     """
-    ai.locations      = {idx: data for idx, data in ai.locations     .items() if len(data) > 1}
-    ai.rotations      = {idx: data for idx, data in ai.rotations     .items() if len(data) > 1}
-    ai.scales         = {idx: data for idx, data in ai.scales        .items() if len(data) > 1}
-    ai.float_channels = {idx: data for idx, data in ai.float_channels.items() if len(data) > 1}
+    ai.locations = {idx: data if len(data) > 1 else {} for idx, data in ai.locations.items()}
+    ai.rotations = {idx: data if len(data) > 1 else {} for idx, data in ai.rotations.items()}
+    ai.scales = {idx: data if len(data) > 1 else {} for idx, data in ai.scales.items()}
+    ai.float_channels = {idx: data if len(data) > 1 else {} for idx, data in ai.float_channels.items()}
 
 
 def extract_anim_channels(bpy_armature_obj, nla_track, material_anims, camera_anims, light_anims, unhandled_anims, errorlog, is_base):
