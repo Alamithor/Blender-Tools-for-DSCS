@@ -1,6 +1,7 @@
 import struct
 
 import bpy
+import mathutils
 
 from ...Core.FileFormats.Geom.GeomInterface import GeomInterface
 from ...Core.FileFormats.Geom.GeomBinary.MeshBinary.Base import Vertex
@@ -245,9 +246,11 @@ class VertexGetter:
 
 def make_vertex(vertex_data, loop_data):
     pos, skin_indices, skin_weights = vertex_data
+
+    yup_pos = mathutils.Vector((pos.x, pos.z, -pos.y))
     
     vb = Vertex()
-    vb.position = pos
+    vb.position = yup_pos
     vb.normal   = loop_data[0]
     vb.UV1      = loop_data[1]
     vb.UV2      = loop_data[2]
