@@ -250,7 +250,7 @@ def make_vertex(vertex_data, loop_data):
     yup_pos = mathutils.Vector((pos.x, pos.z, -pos.y))
     
     vb = Vertex()
-    vb.position = yup_pos
+    vb.position = pos
     vb.normal   = loop_data[0]
     vb.UV1      = loop_data[1]
     vb.UV2      = loop_data[2]
