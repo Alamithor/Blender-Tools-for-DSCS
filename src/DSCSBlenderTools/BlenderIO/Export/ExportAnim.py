@@ -43,7 +43,9 @@ def extract_base_anim(bpy_armature_obj, errorlog, bpy_to_dscs_bone_map):
         # coordinates.
         parent = bone.parent
         if parent is None:
-            parent_matrix = Matrix.Identity(4)
+            # Handle Z up and Y up axis
+            quaternion_rotation = Quaternion([1/(2**.5), 1/(2**.5), 0, 0])
+            parent_matrix = quaternion_rotation.to_matrix().to_4x4()
         else:
             parent_matrix = parent.matrix_local
             
