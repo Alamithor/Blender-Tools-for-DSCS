@@ -69,8 +69,11 @@ def _parent_relative_bind_relative_swap(bpy_bone, positions, rotations, scales, 
     if model_transforms is None:
         inverse_world_axis_rotation = Matrix.Identity(4)
         bone_axis_permutation       = Matrix.Identity(4)
-    else:    
-        inverse_world_axis_rotation = model_transforms.world_axis_rotation_inverse
+    else:
+        quaternion_rotation = Quaternion([1 / (2 ** .5), 1 / (2 ** .5), 0, 0])
+        parent_matrix = quaternion_rotation.to_matrix().to_4x4()
+
+        inverse_world_axis_rotation = parent_matrix.inverted()
         bone_axis_permutation       = model_transforms.bone_axis_permutation
 
     if bpy_bone.parent is not None:
