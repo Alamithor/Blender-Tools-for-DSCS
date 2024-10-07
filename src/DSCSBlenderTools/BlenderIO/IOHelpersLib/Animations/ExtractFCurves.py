@@ -1,9 +1,113 @@
 import re
+from typing import Dict, List
 
+import bpy.types
+import mathutils
 import numpy as np
-from ..Maths import lerp, quat_to_euler, euler_to_quat
 
-BONE_PATTERN = re.compile("pose\.bones\[\"(.*)\"\].(.*)")
+from ..Maths import lerp, euler_to_quat
+
+
+BONE_PATTERN = re.compile(r"pose\.bones\[\"(.*)\"\]\.(.*)")
+
+
+def collect_fcurves_from_action(action: bpy.types.Action) -> Dict[str, Dict[str, Dict[int, bpy.types.FCurve]]]:
+    re_pattern = re.compile(r'.+\["(\w+)"\]\.(\w+)')
+    result = {}
+
+    for fcurve in action.fcurves:
+        obj_name = ''
+        obj_attr = ''
+        data_path = fcurve.data_path
+        if data_path.startswith('pose.bones'):
+            obj_name, obj_attr = re_pattern.match(data_path).groups()
+        elif data_path.startswith('DSCS_MaterialProperties.'):
+            temp_list = data_path.split('.')
+            obj_name = temp_list[0]
+            obj_attr = '.'.join(temp_list[1:])
+
+        if obj_name not in result:
+            result[obj_name] = {}
+        if obj_attr not in result[obj_name]:
+            result[obj_name][obj_attr] = {}
+
+        result[obj_name][obj_attr][fcurve.array_index] = fcurve
+
+    return result
+
+
+def collect_keyframe_from_fcurves(
+        attr_name: str,
+        fcurves_data: Dict[int, bpy.types.FCurve],
+        frame_range: mathutils.Vector,
+) -> Dict[int, List]:
+    crv_st = int(frame_range.x)
+    crv_en = int(frame_range.y) + 1
+    default_values = {
+        'rotation_quaternion': [1., 0., 0., 0.],
+        'rotation_euler': [0., 0., 0.],
+        'location': [0., 0., 0.],
+        'scale': [1., 1., 1.],
+    }
+    def_val = default_values[attr_name]
+    # Initialize output
+    result = {each_frame: [] for each_frame in range(crv_st, crv_en)}
+    # Create look up
+    keyframe_look_up = {}
+    for idx, fcurve in fcurves_data.items():
+        for k in fcurve.keyframe_points:
+            frame = k.co.x
+            val = k.co.y
+            if frame not in keyframe_look_up:
+                keyframe_look_up[frame] = []
+            keyframe_look_up[frame].insert(idx, val)
+
+    for each_frame in range(crv_st, crv_en):
+        if each_frame in keyframe_look_up:
+            result[each_frame].extend(keyframe_look_up[each_frame])
+        else:
+            if len(keyframe_look_up) == 0:
+                result[each_frame] = def_val
+            elif len(keyframe_look_up) == 1:
+                key_look_up = list(keyframe_look_up.keys())[-1]
+                result[each_frame] = keyframe_look_up[key_look_up][:]
+            else:
+                for idx, fcurve in fcurves_data.items():
+                    result[each_frame].insert(idx, fcurve.evaluate(each_frame))
+
+    return result
+
+
+def format_to_bone_fcurve_data(
+        raw_fcurves_data: Dict[str, Dict[str, Dict[int, bpy.types.FCurve]]],
+        bone_collection: Dict[str, bpy.types.Bone],
+        frame_range: mathutils.Vector,
+) -> Dict[str, Dict[str, Dict[int, List]]]:
+    result = {}
+    for obj_name, obj_data in raw_fcurves_data.items():
+        if obj_name not in bone_collection:
+            continue
+        if obj_name not in result:
+            result[obj_name] = {}
+        bone = bone_collection[obj_name]
+        rotation_mode = bone.rotation_mode
+        for attr_name, fcurves_data in obj_data.items():
+            keyframe_data = collect_keyframe_from_fcurves(attr_name, fcurves_data, frame_range)
+
+            if rotation_mode != "QUATERNION" and attr_name == 'rotation_euler':
+                keyframe_data = {k: [q for q in euler_to_quat(v, rotation_mode)] for k, v in keyframe_data.items()}
+                attr_name = 'rotation_quaternion'
+
+            result[obj_name][attr_name] = keyframe_data
+        if 'rotation_quaternion' not in result[obj_name]:
+            result[obj_name]['rotation_quaternion'] = {}
+        if 'location' not in result[obj_name]:
+            result[obj_name]['location'] = {}
+        if 'scale' not in result[obj_name]:
+            result[obj_name]['scale'] = {}
+
+    return result
+
 
 #############
 # INTERFACE #

@@ -14,3 +14,6 @@ from .ChannelTransform import parent_relative_to_bind_relative_preblend
 from .ChannelTransform import bind_relative_to_parent_relative
 from .ChannelTransform import bind_relative_to_parent_relative_preblend
 from .TransformsObject import ModelTransforms
+
+from .ExtractFCurves import collect_fcurves_from_action
+from .ExtractFCurves import format_to_bone_fcurve_data
