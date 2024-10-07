@@ -122,12 +122,12 @@ def extract_vertices(bpy_mesh_obj, errorlog, bone_names):
     
     # Extract data
     loop_data = [
-        get_normals(bpy_mesh_obj,   props.requires_normals,  4),
-        get_uvs(bpy_mesh_obj,       props.requires_uv1,      "UV1", 6, errorlog),
-        get_uvs(bpy_mesh_obj,       props.requires_uv2,      "UV2", 6, errorlog),
-        get_uvs(bpy_mesh_obj,       props.requires_uv3,      "UV3", 6, errorlog),
-        get_colors(bpy_mesh_obj,    props.requires_colors,   "Map", "FLOAT", errorlog),
-        get_tangents (bpy_mesh_obj, props.requires_tangents,  4, transform=lambda x, l: (*x, l.bitangent_sign)),
+        get_normals(bpy_mesh_obj,  4),
+        get_uvs(bpy_mesh_obj, len(bpy_mesh.uv_layers) == 1, "UV1", 6, errorlog),
+        get_uvs(bpy_mesh_obj, len(bpy_mesh.uv_layers) == 2, "UV2", 6, errorlog),
+        get_uvs(bpy_mesh_obj, len(bpy_mesh.uv_layers) == 3, "UV3", 6, errorlog),
+        get_colors(bpy_mesh_obj, "Map", "FLOAT", errorlog),
+        get_tangents(bpy_mesh_obj, 4, transform=lambda x, l: (*x, l.bitangent_sign)),
         get_binormals(bpy_mesh_obj, props.requires_binormals, 4)
     ]
     
