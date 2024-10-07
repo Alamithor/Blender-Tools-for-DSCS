@@ -50,25 +50,25 @@ def bpy_mesh_to_VAO_IBO(bpy_mesh, get_vertex_data, loop_data, make_vertex):
     return exported_vertices, faces, vao_vert_to_bpy_vert
 
 
-def get_normals(bpy_mesh_obj, use_normals, sigfigs, transform=lambda x, l: x):
+def get_normals(bpy_mesh_obj, sigfigs, transform=lambda x, l: x):
     mesh = bpy_mesh_obj.data
     nloops = len(mesh.loops)
-    if use_normals:
-        data  = fetch_data(mesh.loops, "normal", sigfigs)
+    try:
+        data = fetch_data(mesh.loops, "normal", sigfigs)
         loops = mesh.loops
         return [transform(d, l) for d, l in zip(data, loops)]
-    else:
+    except:
         return empty_attr(nloops)
 
 
-def get_tangents(bpy_mesh_obj, use_tangents, sigfigs, transform=lambda x, l: x):
+def get_tangents(bpy_mesh_obj, sigfigs, transform=lambda x, l: x):
     mesh = bpy_mesh_obj.data
     nloops = len(mesh.loops)
-    if use_tangents:
-        data  = fetch_data(mesh.loops, "tangent", sigfigs)
+    try:
+        data = fetch_data(mesh.loops, "tangent", sigfigs)
         loops = mesh.loops
         return [transform(d, l) for d, l in zip(data, loops)]
-    else:
+    except:
         return empty_attr(nloops)
 
 
@@ -83,14 +83,18 @@ def get_binormals(bpy_mesh_obj, use_binormals, sigfigs, transform=lambda x, l: x
         return empty_attr(nloops)
 
 
-def get_uvs(bpy_mesh_obj, use_uv, map_name, sigfigs, errorlog=None, transform=lambda x, l: x):
+def uv_transformation(data, loops):
+    return tuple([data[0], 1.-data[1]])
+
+
+def get_uvs(bpy_mesh_obj, use_uv, map_name, sigfigs, errorlog=None):
     mesh = bpy_mesh_obj.data
     nloops = len(mesh.loops)
     if use_uv:
         if map_name in mesh.uv_layers:
             data  = fetch_data(mesh.uv_layers[map_name].data, "uv", sigfigs)
             loops = mesh.loops
-            return [transform(d, l) for d, l in zip(data, loops)]
+            return [uv_transformation(d, l) for d, l in zip(data, loops)]
         else:
             if errorlog is not None:
                 errorlog.log_warning_message(f"Unable to locate UV Map '{map_name}' on mesh '{bpy_mesh_obj.name}'; exporting a fallback blank map")
@@ -99,11 +103,11 @@ def get_uvs(bpy_mesh_obj, use_uv, map_name, sigfigs, errorlog=None, transform=la
         return empty_attr(nloops)
 
 
-def get_colors(bpy_mesh_obj, use_colors, map_name, data_format, errorlog=None, transform=lambda x: x):
+def get_colors(bpy_mesh_obj, map_name, data_format, errorlog=None, transform=lambda x: x):
     nloops = len(bpy_mesh_obj.data.loops)
     if data_format not in ("BYTE", "FLOAT"):
         raise NotImplementedError("Invalid data format provided to 'get_colors'. Options are 'BYTE' or 'FLOAT'.")
-    if use_colors:
+    try:
         ################
         # EXTRACT DATA #
         ################
@@ -151,7 +155,7 @@ def get_colors(bpy_mesh_obj, use_colors, map_name, data_format, errorlog=None, t
         else:
             raise NotImplementedError("Unhandled data type combination '{dtype}' and '{data_format}'")
         
-    else:
+    except:
         return empty_attr(nloops)
 
 ##################

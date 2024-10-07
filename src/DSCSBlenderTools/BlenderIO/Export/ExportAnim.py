@@ -1,15 +1,17 @@
+import math
+
 import numpy as np
 import bpy
-from mathutils import Matrix, Quaternion
+from mathutils import Quaternion
 
 from ...Utilities.Hash import dscs_hash_string
 from ...Core.FileFormats.Anim.AnimInterface import AnimInterface
-from ..IOHelpersLib.Animations import extract_fcurves
-from ..IOHelpersLib.Animations import synchronised_quat_bone_data_from_fcurves
-from ..IOHelpersLib.Animations import synchronised_quat_object_transforms_from_fcurves
-from ..IOHelpersLib.Animations import bind_relative_to_parent_relative
-from ..IOHelpersLib.Animations import bind_relative_to_parent_relative_preblend
-from ..IOHelpersLib.Maths import rational_approx_brute_force
+from ..IOHelpersLib.Animations import (
+    extract_fcurves,
+    bind_relative_to_parent_relative, bind_relative_to_parent_relative_preblend,
+    collect_fcurves_from_action, format_to_bone_fcurve_data,
+)
+from ..IOHelpersLib.Maths import rational_approx_brute_force, lerp
 from ..Utils.BoneUtils import MODEL_TRANSFORMS
 from ..Utils.ModelComponents import get_child_materials
 
@@ -23,9 +25,14 @@ def extract_base_anim(bpy_armature_obj, errorlog, bpy_to_dscs_bone_map):
         ai = AnimInterface()
     else:
         base_anim_track = bpy_armature_obj.animation_data.nla_tracks["base"]
-        ai = extract_anim_channels(bpy_armature_obj, base_anim_track, {}, {}, {}, {}, errorlog, is_base=True)
+        node_transforms, handled_float_transforms, handled_float_transforms = extract_anim_channels(
+            bpy_armature_obj,
+            base_anim_track, {}, {}, {}, {},
+            errorlog,
+            is_base=True
+        )
         # FIX ME: PASS FLOAT CHANNELS...
-        ai = transform_to_animation(bpy_armature_obj, "base", bpy_to_dscs_bone_map, errorlog, ai[0], {})
+        ai = transform_to_animation(bpy_armature_obj, "base", bpy_to_dscs_bone_map, errorlog, node_transforms, {})
     # Load up data for any missing indices from the armature
     for bone in bpy_armature_obj.data.bones:
         bone_idx = bpy_to_dscs_bone_map[bone.name]
@@ -43,7 +50,9 @@ def extract_base_anim(bpy_armature_obj, errorlog, bpy_to_dscs_bone_map):
         # coordinates.
         parent = bone.parent
         if parent is None:
-            parent_matrix = Matrix.Identity(4)
+            # Handle Z up and Y up axis
+            quaternion_rotation = Quaternion([1/(2**.5), 1/(2**.5), 0, 0])
+            parent_matrix = quaternion_rotation.to_matrix().to_4x4()
         else:
             parent_matrix = parent.matrix_local
             
@@ -53,11 +62,15 @@ def extract_base_anim(bpy_armature_obj, errorlog, bpy_to_dscs_bone_map):
         # this stuff instead of randomly passing matrices around?!!
         pos, quat, scale = (parent_matrix.inverted() @ bone.matrix_local).decompose()
         
-        if not has_pos: ai.locations[bone_idx] = {0: [pos.x, pos.y, pos.z]}
-        if not has_rot: ai.rotations[bone_idx] = {0: [quat.x, quat.y, quat.z, quat.w]}
-        if not has_scl: ai.scales   [bone_idx] = {0: [scale.x, scale.y, scale.z]}
+        if not has_pos:
+            ai.locations[bone_idx] = {0: [pos.x, pos.y, pos.z]}
+        if not has_rot:
+            ai.rotations[bone_idx] = {0: [quat.x, quat.y, quat.z, quat.w]}
+        if not has_scl:
+            ai.scales[bone_idx] = {0: [scale.x, scale.y, scale.z]}
         
     return ai
+
 
 def extract_all_anim_channels(bpy_armature_object, errorlog, bpy_to_dscs_bone_map):
     ais = {}
@@ -114,26 +127,23 @@ def optimise_base_anim(ai):
     Optimise the base animation by dropping any animation channels with less
     than two frames, since these are already loaded into constant skeleton data.
     """
-    ai.locations      = {idx: data for idx, data in ai.locations     .items() if len(data) > 1}
-    ai.rotations      = {idx: data for idx, data in ai.rotations     .items() if len(data) > 1}
-    ai.scales         = {idx: data for idx, data in ai.scales        .items() if len(data) > 1}
-    ai.float_channels = {idx: data for idx, data in ai.float_channels.items() if len(data) > 1}
+    ai.locations = {idx: data if len(data) > 1 else {} for idx, data in ai.locations.items()}
+    ai.rotations = {idx: data if len(data) > 1 else {} for idx, data in ai.rotations.items()}
+    ai.scales = {idx: data if len(data) > 1 else {} for idx, data in ai.scales.items()}
+    ai.float_channels = {idx: data if len(data) > 1 else {} for idx, data in ai.float_channels.items()}
 
 
 def extract_anim_channels(bpy_armature_obj, nla_track, material_anims, camera_anims, light_anims, unhandled_anims, errorlog, is_base):
-    if is_base:
-        transform = bind_relative_to_parent_relative
-    else:
-        transform = bind_relative_to_parent_relative_preblend
-    
     #############
     # BONE DATA #
     #############
     # TODO: Add support for multiple strips... just merge the keyframes into one big anim...
-    node_transforms = get_bone_data(nla_track, bpy_armature_obj, 
-                                    transform,
-                                    MODEL_TRANSFORMS,
-                                    errorlog)
+    node_transforms = get_bone_data(
+        nla_track,
+        bpy_armature_obj,
+        errorlog,
+        is_base = is_base
+    )
     
     #################
     # MATERIAL DATA #
@@ -149,13 +159,11 @@ def extract_anim_channels(bpy_armature_obj, nla_track, material_anims, camera_an
     # CAMERA DATA #
     ###############
     # TODO: IMPLEMENT
-    pass
 
     ##############
     # LIGHT DATA #
     ##############
     # TODO: IMPLEMENT
-    pass
     
 
     ###################
@@ -233,30 +241,59 @@ def first_track_action(nla_track, obj_identifier, errorlog):
     return strip.action
     
 
-def get_bone_data(nla_track, bpy_armature_obj, transform, model_transforms, errorlog):
+def get_bone_data(nla_track, bpy_armature_obj, errorlog, is_base=False):
+    """
+    {
+        bone.name: {
+            location: {
+                1: [0, 0, 0],
+                key_frame: List[float, float, float],
+            },
+            scale: {
+                1: [1, 1, 1],
+                key_frame: List[float, float, float],
+            },
+            rotation_quaternion: {
+                1: [1, 0, 0, 0],
+                key_frame: List[float, float, float, float],
+            }
+        }
+    }
+    """
     action = first_track_action(nla_track, f"armature '{bpy_armature_obj.name}'", errorlog)
     out = []
     if action is None:
         return out
-    
     bone_names = [b.name for b in bpy_armature_obj.data.bones]
-    fcurves = extract_fcurves(action)
-    bone_transforms = synchronised_quat_bone_data_from_fcurves(fcurves, bpy_armature_obj.pose.bones)
-    
-    for bone_name, ad in bone_transforms.items():
-        if bone_name not in bpy_armature_obj.pose.bones:
-            continue
-        bpy_bone = bpy_armature_obj.data.bones[bone_name]
-        t, r, s = transform(bpy_bone, 
-                            ad["location"].values(),
-                            [q for q in ad["rotation_quaternion"].values()],
-                            ad["scale"].values(),
-                            model_transforms)
-        
-        out.append([bone_names.index(bone_name), bone_name, 
-                    {(k-1) : v for k, v in zip(ad["location"].keys(), t)}, 
-                    {(k-1) : v for k, v in zip(ad["rotation_quaternion"], r)}, 
-                    {(k-1) : v for k, v in zip(ad["scale"], s)}])
+
+    if is_base:
+        transform = bind_relative_to_parent_relative
+    else:
+        transform = bind_relative_to_parent_relative_preblend
+    # Collect fcurves data from action clip
+    raw_fcurves_data = collect_fcurves_from_action(action)
+    # Format fcurves data into bone fcurves data
+    bone_keyframe_data = format_to_bone_fcurve_data(
+        raw_fcurves_data,
+        bpy_armature_obj.pose.bones,
+        action.curve_frame_range
+    )
+    for bn_name, keyframe_data in bone_keyframe_data.items():
+        bpy_bone = bpy_armature_obj.data.bones[bn_name]
+        t, r, s = transform(
+            bpy_bone,
+            keyframe_data['location'].values(),
+            keyframe_data['rotation_quaternion'].values(),
+            keyframe_data['scale'].values(),
+            MODEL_TRANSFORMS
+        )
+        out.append([
+            bone_names.index(bn_name),
+            bn_name,
+            {(k-1): v for k, v in zip(keyframe_data['location'].keys(), t)},
+            {(k-1): v for k, v in zip(keyframe_data['rotation_quaternion'].keys(), r)},
+            {(k-1): v for k, v in zip(keyframe_data['scale'].keys(), s)},
+        ])
 
     return out
 

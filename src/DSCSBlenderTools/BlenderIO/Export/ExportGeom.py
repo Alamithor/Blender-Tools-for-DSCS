@@ -1,6 +1,7 @@
 import struct
 
 import bpy
+import mathutils
 
 from ...Core.FileFormats.Geom.GeomInterface import GeomInterface
 from ...Core.FileFormats.Geom.GeomBinary.MeshBinary.Base import Vertex
@@ -108,7 +109,7 @@ def extract_meshes(gi, armature_obj, errorlog,  bone_names, material_names):
         unsigned_hash = struct.unpack('I', struct.pack('i', props.name_hash))[0]
         m = gi.add_mesh(unsigned_hash, props.flags, material_idx, vertices, indices)
         m.vertex_attributes = None  # Setting to 'None' will cause the attributes to be auto-calculated
-    
+
 
 def extract_vertices(bpy_mesh_obj, errorlog, bone_names):
     bpy_mesh = bpy_mesh_obj.data
@@ -121,12 +122,12 @@ def extract_vertices(bpy_mesh_obj, errorlog, bone_names):
     
     # Extract data
     loop_data = [
-        get_normals(bpy_mesh_obj,   props.requires_normals,  4),
-        get_uvs(bpy_mesh_obj,       props.requires_uv1,      "UV1", 6, errorlog),
-        get_uvs(bpy_mesh_obj,       props.requires_uv2,      "UV2", 6, errorlog),
-        get_uvs(bpy_mesh_obj,       props.requires_uv3,      "UV3", 6, errorlog),
-        get_colors(bpy_mesh_obj,    props.requires_colors,   "Map", "FLOAT", errorlog),
-        get_tangents (bpy_mesh_obj, props.requires_tangents,  4, transform=lambda x, l: (*x, l.bitangent_sign)),
+        get_normals(bpy_mesh_obj,  4),
+        get_uvs(bpy_mesh_obj, len(bpy_mesh.uv_layers) == 1, "UV1", 6, errorlog),
+        get_uvs(bpy_mesh_obj, len(bpy_mesh.uv_layers) == 2, "UV2", 6, errorlog),
+        get_uvs(bpy_mesh_obj, len(bpy_mesh.uv_layers) == 3, "UV3", 6, errorlog),
+        get_colors(bpy_mesh_obj, "Map", "FLOAT", errorlog),
+        get_tangents(bpy_mesh_obj, 4, transform=lambda x, l: (*x, l.bitangent_sign)),
         get_binormals(bpy_mesh_obj, props.requires_binormals, 4)
     ]
     
@@ -245,6 +246,8 @@ class VertexGetter:
 
 def make_vertex(vertex_data, loop_data):
     pos, skin_indices, skin_weights = vertex_data
+
+    yup_pos = mathutils.Vector((pos.x, pos.z, -pos.y))
     
     vb = Vertex()
     vb.position = pos
@@ -530,8 +533,10 @@ class UnpackedImageExtractor(BaseImageExtractor):
     
     def export(self, path):
         filepath = os.path.join(path, self.export_name + ".img")
+        file_data = self.get_data()
+        print(f'Exporting image: {filepath}')
         with open(filepath, 'wb') as F:
-            F.write(self.get_data())
+            F.write(file_data)
         
         
 def extract_textures(gi, texture_names, errorlog):
@@ -570,8 +575,10 @@ def extract_textures(gi, texture_names, errorlog):
         if bpy_image is None:
             raise NotImplementedError("NEED TO EXPORT PLACEHOLDER DDS HERE") # Export dummy DDS
         elif bpy_image.packed_file is not None:
+            print('packed image extractor', bpy_image, texture_name)
             texture_extractors.append(PackedImageExtractor(bpy_image, texture_name))
         elif bpy_image.source == "FILE" and os.path.exists(bpy_image.filepath_from_user()):
+            print('unpacked image extractor', bpy_image.filepath_from_user(), texture_name)
             texture_extractors.append(UnpackedImageExtractor(bpy_image, texture_name))
         else:
             errorlog.log_error_message(f"Image '{bpy_image.name}' if not a packed file or a file that exists on disk. Only packed files or images with valid filepaths can currently be exported.")
