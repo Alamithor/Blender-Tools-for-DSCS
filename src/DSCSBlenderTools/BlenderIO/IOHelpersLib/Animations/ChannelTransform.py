@@ -72,12 +72,12 @@ def _parent_relative_bind_relative_swap(bpy_bone, positions, rotations, scales, 
     else:    
         inverse_world_axis_rotation = model_transforms.world_axis_rotation_inverse
         bone_axis_permutation       = model_transforms.bone_axis_permutation
-        
+
     if bpy_bone.parent is not None:
         local_bind_matrix = bone_axis_permutation @ bpy_bone.parent.matrix_local.inverted() @ bpy_bone.matrix_local
     else:
         local_bind_matrix = inverse_world_axis_rotation @ bpy_bone.matrix_local
-    
+
     # Create matrices used in transform
     # This can DEFINITELY be made more efficient if it's a bottleneck
     bind_pose_translation, bind_pose_quaternion, _ = local_bind_matrix.decompose()
@@ -85,10 +85,11 @@ def _parent_relative_bind_relative_swap(bpy_bone, positions, rotations, scales, 
     inv_bind_pose_translation = Matrix.Translation(bind_pose_translation).inverted()
     inv_bind_pose_rotation    = bind_pose_rotation.inverted()
     inv_bone_axis_permutation = bone_axis_permutation.inverted()
-    
+
     # Transform the keyframes
     # Why can't python have if constexpr...
-    rotations = list(rotations)  # Evaluate any generator expressions, since we need to re-use the values
+    # rotations = list(rotations)  # Evaluate any generator expressions, since we need to re-use the values
+    rotations = [Quaternion(r) for r in rotations]
     if parent_to_bind:
         b_positions = (inv_bind_pose_rotation    @ Matrix.Translation(v[:3])          @ inv_bind_pose_translation @ bind_pose_rotation    for v in positions)
         b_rotations = (inv_bind_pose_rotation    @ Quaternion(v).to_matrix().to_4x4()                             @ bone_axis_permutation for v in rotations)
@@ -98,12 +99,12 @@ def _parent_relative_bind_relative_swap(bpy_bone, positions, rotations, scales, 
         b_positions = (bind_pose_rotation    @ Matrix.Translation(v)              @ inv_bind_pose_rotation    @ bind_pose_translation  for v in positions)
         b_rotations = (bind_pose_rotation    @ Quaternion(v).to_matrix().to_4x4() @ inv_bone_axis_permutation                          for v in rotations)
         b_scales    = (bone_axis_permutation @ Matrix.Diagonal([*v[:3], 1.])      @ inv_bone_axis_permutation                          for v in scales   )
-    
+
     # Prepare return variables
     b_positions = [v.to_translation() for v in b_positions]
     b_rotations = [q.to_quaternion()  for q in b_rotations]
     b_scales    = [v.to_scale()       for v in b_scales   ]
-    
+
     # Revert any sign flips that were introduced by converting to and from
     # rotation matrices
     align_quaternion_signs(b_rotations, rotations)
@@ -116,34 +117,35 @@ def _parent_relative_bind_relative_preblend_swap(bpy_bone, positions, rotations,
     if model_transforms is None:
         inverse_world_axis_rotation = Matrix.Identity(4)
         bone_axis_permutation       = Matrix.Identity(4)
-    else:    
+    else:
         inverse_world_axis_rotation = model_transforms.world_axis_rotation_inverse
         bone_axis_permutation       = model_transforms.bone_axis_permutation
-        
+
     if bpy_bone.parent is not None:
         local_bind_matrix = bone_axis_permutation @ bpy_bone.parent.matrix_local.inverted() @ bpy_bone.matrix_local
     else:
         local_bind_matrix = inverse_world_axis_rotation @ bpy_bone.matrix_local
-    
+
     # Create matrices used in transform
     # This can DEFINITELY be made more efficient if it's a bottleneck
     _, bind_pose_quaternion, _ = local_bind_matrix.decompose()
     bind_pose_rotation        = bind_pose_quaternion.to_matrix().to_4x4()
     inv_bind_pose_rotation    = bind_pose_rotation.inverted()
     inv_bone_axis_permutation = bone_axis_permutation.inverted()
-    
+
     # Transform the keyframes
     # Why can't python have if constexpr...
-    rotations = list(rotations)  # Evaluate any generator expressions, since we need to re-use the values
+    # rotations = list(rotations)  # Evaluate any generator expressions, since we need to re-use the values
+    rotations = [Quaternion(r) for r in rotations]
     if parent_to_bind:
         b_positions = (inv_bind_pose_rotation    @ Matrix.Translation(v)               @ bind_pose_rotation    for v in positions)
-        b_rotations = (inv_bone_axis_permutation @ Quaternion(v).to_matrix().to_4x4()  @ bone_axis_permutation for v in rotations)
+        b_rotations = (inv_bone_axis_permutation @ v.to_matrix().to_4x4()  @ bone_axis_permutation for v in rotations)
         b_scales    = (inv_bone_axis_permutation @ Matrix.Diagonal([*v[:3], 1.])       @ bone_axis_permutation for v in scales   )
     else: # bind_to_parent
         b_positions = (bind_pose_rotation    @ Matrix.Translation(v)               @ inv_bind_pose_rotation    for v in positions)
-        b_rotations = (bone_axis_permutation @ Quaternion(v).to_matrix().to_4x4()  @ inv_bone_axis_permutation for v in rotations)
+        b_rotations = (bone_axis_permutation @ v.to_matrix().to_4x4()  @ inv_bone_axis_permutation for v in rotations)
         b_scales    = (bone_axis_permutation @ Matrix.Diagonal([*v[:3], 1.])       @ inv_bone_axis_permutation for v in scales   )
-    
+
     # Prepare return variables
     b_positions = [v.to_translation() for v in b_positions]
     b_rotations = [q.to_quaternion()  for q in b_rotations]
@@ -152,5 +154,5 @@ def _parent_relative_bind_relative_preblend_swap(bpy_bone, positions, rotations,
     # Revert any sign flips that were introduced by converting to and from
     # rotation matrices
     align_quaternion_signs(b_rotations, rotations)
-    
+
     return b_positions, b_rotations, b_scales
